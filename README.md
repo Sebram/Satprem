@@ -1,2 +1,2 @@
 # Satprem
-Admin Generator fror Symfony 2
+Admin Generator for Symfony 2
