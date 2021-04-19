@@ -1,0 +1,473 @@
+<?php //SFACTION.php
+	require 'wbrmspm/ent/sfent.php';
+	require 'wbrmspm/fld/sfld.php';
+	require 'wbrmspm/rel/sfrel.php';
+	require	'wbrmspm/build/sfajax.php';
+	require	'wbrmspm/build/builder.php';	
+	require	'wbrmspm/build/tplbuilder.php';	
+	require	'wbrmspm/ctrl/spmfos.php';	
+
+
+	$myEntityTab = array();
+	$myFieldTab = array();
+	$myRelTab = array();
+	$fieldsTabToCtrl=array();
+	$stateFos = false;
+
+	function read ($length='255') 
+	{ 
+	   if (!isset ($GLOBALS['StdinPointer'])) 
+	   { 
+	      $GLOBALS['StdinPointer'] = fopen ("php://stdin","r"); 
+	   } 
+	   $line = fgets ($GLOBALS['StdinPointer'],$length); 
+	   return trim ($line); 
+	} 
+
+	$p = explode('/',getcwd());
+
+	$rootFileName = $p[count($p)-1];  //  le nom du projet du repertoire root du site
+
+	function getBundleName($bundlePath){
+
+		$name="";
+
+		$bundle = explode('/', $bundlePath);
+		
+		if(count($bundle) == 2) $name = $bundle[1];
+		
+		if(count($bundle) == 3) $name = $bundle[1].$bundle[2];
+	
+		return $name; 
+	}
+	
+	function getNameSpace(){
+
+		$name="";
+
+		$bundle = explode('/', $bundlePath);
+		
+		$name = $bundle[1];
+		
+		return $name; 
+	}
+
+
+
+	echo 'Give me the path to your bundle (ex: src/Acme/AppBundle) : ';
+	$bundlePath = read();
+
+
+
+	$pro = getBundleName($bundlePath); // like src/Acme/AppBundle
+	//echo '\n'.$pro;
+	$i=0;
+	$j=0;
+	$k1="";
+	$k2="";
+	$relFieldname="";
+	$phpDoctrine = "php app/console generate:doctrine:entity --no-interaction ";
+	$command = "";
+	$arrayEntityName=array();  // pour recuperer les noms d'entity plus tard
+	do
+	{
+
+		echo "\nNew entity name : ";
+
+		$ent = new sfent();
+
+		$ent->setProject($pro);
+		
+		$entName = read();		
+
+		if($entName == "") // if Enter
+		{
+			$entName = "Article";						
+		}
+
+		$existEntity = ""; $state=NULL;
+		if(file_exists($bundlePath.'/Entity')){
+			$existEntfiles = scandir($bundlePath.'/Entity', 1);    // REQUIER LE REPERTOIRE ENTITY
+			foreach ($existEntfiles as $key => $f){
+				if($f ==  $entName.'.php'){
+					$existEntity=$f;
+					echo "\n//####> YOUR ENTITY $ENTNAME ALL READY EXIST , WE CAN'T CREATE 2 ENTITIES WITH THE SAME NAME ! \n"; 
+					$state=false;
+					break;
+				}
+				else{$state=true;}
+			}
+		}
+		else{
+			if(mkdir($bundlePath.'/Entity')){
+				$state=true;
+				 echo "\n//####>CREATION DU REPERTOIRE ENTITY CHECK !\n";
+			}
+			else echo "\n//####> PROBLEME DE CREATION DU REPERTOIRE ENTITY :( UNCHECK ! \n";
+		}
+			
+		
+		
+	
+		if($state==true)
+		{	
+			$ent->setName($entName);
+
+			$arrayEntityName[$i] = $entName;
+			
+			$myEntityTab[$i] = $ent->getsfent();
+			
+			$command .= $myEntityTab[$i];  // Creating commandline to do system("");
+			
+			//echo $myEntityTab[$i]."\n";
+
+			do
+			{
+				$fi = new sfld();  // On créer un nouvel object Field
+
+				// nom du Champ 
+				echo "\nField name (ex: title) : ";
+				$fieldName = read();
+				if($fieldName == "") // if Enter
+				{
+					$fieldName = "name";						
+				} 
+				$fi->setName($fieldName);
+
+				// TYPE DE CHAMP 
+				echo "\nField type (ex: string) : ";
+				$fieldType = read();
+				if($fieldType == "") // if Enter
+				{
+					$fieldType = "string";
+				} 
+				$fi->setType($fieldType);
+				
+				// VALEUR DU CHAMP 
+				echo "\nField value (ex: 255) : ";
+				$fieldValue = read();
+				if($fieldValue == "") // if Enter
+				{
+					$fieldValue = "255";
+				} 
+				$fi->setValue($fieldValue);
+
+				/******/ // ON REMPLIS LE TABLEAU DE CHAMP
+				$myFieldTab[$j] = $fi->getsfld();
+				$command .= $myFieldTab[$j];  // ON AJOUTE ÇA À LA COMMANDE DONT ON VA AVOIR BESOIN
+				/******/			
+
+				// ON REMPLIS LE TABLEAU DE CHAMPS POUR LA GENERATION DES CTRLS
+				array_push($fieldsTabToCtrl, $fi->arrayFieldName());
+
+				//echo $command."\n";
+				
+				echo "\nNew Field [y/n] ? ";  // NOUVEAU CHAMP ?
+				$kfield = read();
+
+				if($kfield == 'y' ){ $k2 = 'y'; }  // SI OUI ON CONTINUE LA BOUCLE  DES CHAMPS(VOIR EN BAS)
+				else
+				{	
+					echo "\nRelations [y/n] ? ";  // DES RELATIONS ?
+					$doRel = read();
+					if($doRel == 'y' || $doRel == '')
+					{   // SI OUI ON FAIT UNE BOUCLE POUR REMPLIR LE TABLEAU DES RELATIONS
+						$rltn = 'y';
+						while($rltn == 'y')  // (TANT QU'ON REPOND 'Y' (YES) ALORS ON CONTINUE L'ENREGISTREMENT DES RELATIONS)
+						{
+							$rel = new sfrel();
+							
+							echo "\nRelation type [ManyToOne / OneToMany / ManyToMany] : ";
+							$relation = read();
+							$rel->setRelation($entName, $relation);
+
+							echo "\nGive me field name to add in ".$entName." entity and create relation on it [User] : \n";	
+							$relFieldname = read();
+							$rel->setField($relFieldname);
+							
+							
+							$myRelTab[$i]= $rel->getRelation();	
+							
+
+							echo $myRelTab[$i]." OK !\n";
+							
+							echo "More relations ? ";  //  PLUS (+) D'ENTITÉ ???
+
+							$rltn = read();	 
+							if($rltn == 'n' ){ $k2 = 'n'; break; } // SI ON TAPE "N" ON STOP ! 
+						} // ciao les relations !
+
+					} 
+					if($doRel == 'n'){
+						$k2 = 'n';
+					}
+					// SINON ON SORT DE LA BOUCLE D'ENREGISTREMENT DES CHAMPS
+				}
+				$i++;
+			}while($k2 == 'y'); 
+			echo "\nMore Entity ? "; // PLUS (+) D'ENTITIES ?
+			$k1 = read(); 
+			if($k1 == 'y'){
+				$i++;
+			}
+			else
+			{
+				$phpDoctrine.=$command."' --format=xml"."\n";
+					
+			}
+		}
+		if( $state == false ){ 
+			$k1 = 'y';  
+		}
+	}while($k1 == 'y');
+		
+
+	//echo $phpDoctrine;
+	
+	/*
+	* HERE IS ZE DOCTRINE COMMANDE TO GENERATE ENTITIES  !!!
+	* MAIS ON VERIFIE AVANT QUE L'ENTITÉ N'EST PAS DÉJÀ EXISTANTE !!! AUQUEL CAS ON RENVOI UN MESSAGE **
+	* D'ALERTE
+	*/
+	 system($phpDoctrine, $retval);  //  POUR LANCER LA COMMANDE DOCTRINE:ENTITY	
+	//=================================================================
+		
+	echo " Souhaitez-vous installer une administration sur vos entité ? [y/n]: \n";
+	$stateFos = read();	
+	
+	if($stateFos=="y") $stateFos=true;  // si true on ajoute les droits sur les vues
+
+	//=================================================================
+	/*
+	* HERE WE WRITE THE AJAX FILES , AND CONTROLLERS
+	*/
+	foreach ($arrayEntityName as $theEntity)
+	{
+		if(mkdir($bundlePath.'/Resources/views/'.$theEntity)) echo "DIR CREATED \r\n";
+		else echo " une erreur est survenue lors de la creation du repertoire $theEntity";		 
+		
+		$writeAjaxFunc = NEW sfajax();
+		$writeAjaxFunc->setBundlePath($bundlePath);
+		$writeAjaxFunc->setEntity($theEntity);
+		$writeAjaxFunc->setPath('web/spmAjax/'.$theEntity.'.js'); 
+		$writeAjaxFunc->setDivFrom('#routediv');
+		$writeAjaxFunc->setDivTo('#routeDisplay');
+		$writeAjaxFunc->setMethod('POST');
+		$writeAjaxFunc->setContent();
+		$writeAjaxFunc->writeFile();
+
+		$builder = new Builder();
+		$builder->setFos($stateFos);
+		$builder->setPath("$bundlePath/Controller/$theEntity".'Controller.php');
+		$builder->setEntityname($theEntity);
+		$builder->setBundlename($bundlePath);
+		$builder->setFields($fieldsTabToCtrl);
+
+		$builder->buildForms();	
+		$builder->buildHeaderCtrl();
+		$builder->buildSearchCtrl();			
+		$builder->buildAddCtrl();
+		$builder->buildEditCtrl();
+		$builder->buildShowCtrl();
+		$builder->buildShowListCtrl();	
+		$builder->buildDeleteCtrl();
+		$builder->buildFooterCtrl();	
+		$builder->WriteCtrl();
+
+		$template = new Tplbuilder();
+		$template->setFos($stateFos);
+		$template->setEntityname($theEntity);
+		$template->setFields($fieldsTabToCtrl);
+		$template->setProjectname($rootFileName);
+		$template->layoutTpl($existEntfiles);
+		$template->indexTpl();
+		$template->addTpl();
+		$template->searchTpl();
+		$template->editTpl();
+		$template->showTpl();
+		$template->showListTpl();
+		$template->deleteTpl();
+		$template->WriteTpl($template->getLayout(), getcwd().'/app/Resources/views/layout.html.php');
+		$template->WriteTpl($template->getIndex(), $bundlePath.'/Resources/views/'.$theEntity.'/index.html.php');
+		$template->WriteTpl($template->getAdd(), $bundlePath.'/Resources/views/'.$theEntity.'/add.html.php');
+		$template->WriteTpl($template->getSearch(), $bundlePath.'/Resources/views/'.$theEntity.'/search.html.php');
+		$template->WriteTpl($template->getEdit(), $bundlePath.'/Resources/views/'.$theEntity.'/edit.html.php');
+		$template->WriteTpl($template->getShow(), $bundlePath.'/Resources/views/'.$theEntity.'/show.html.php');
+		$template->WriteTpl($template->getShowList(), $bundlePath.'/Resources/views/'.$theEntity.'/show_list.html.php');
+		$template->WriteTpl($template->getDelete(), $bundlePath.'/Resources/views/'.$theEntity.'/delete.html.php');
+		if($stateFos){
+			$template->WriteTpl($template->getDelete(), $bundlePath.'/Resources/views/'.$theEntity.'/login.html.php');
+		}
+	}
+
+	
+	system("php app/console doctrine:schema:update --dump-sql"); 
+	system("php app/console doctrine:schema:update --force"); 
+
+
+//=================================================================
+//=================================================================
+// Souhaitez-vous installer une administration avec FOSUSERBUNDLE sur vos entité ? [y/n]
+
+function getLoginInfo($fos){
+	echo "Veuillez entrer un nom d\'utilisateur \n";
+	$loginName = read();
+	echo "Veuillez entrer un email \n";
+	$loginMail = read();
+	echo "Et enfin entrer mot de passe \n";
+	$loginPass = read();
+	echo "Confirmez le mot de passe \n";
+	$confirmPass = read();
+	if($loginPass == $confirmPass){
+		$fos->createUser($loginName , $loginMail, $loginPass);
+		$fos->promoteUser();
+	}
+	else{ 
+		echo "Les mots de passe ne correspondent pas recommencer: \n"; 
+		getLoginInfo($fos);
+	}
+}
+
+if($stateFos == "y")
+{
+	$fos = new spmfos();
+	$fos->setFirstEntity($arrayEntityName[0]); // PAR DEFAUT on recupere la premiere entity créée pour faire la redirection du login 
+	$fos->setBundleRootName($bundlePath);
+	$fos->setBundlenamespace($bundlePath);
+	$fos->buildUserBndl();
+	$fos->buildUserEnt();
+	$fos->docUpdate();
+	$fos->docForce();
+	$fos->editUserBundleFile();
+	$fos->cmdDownloadFos();
+	$fos->rewriteUserEnt();
+	$fos->setLoginForm();
+	$fos->setRouteDebug();
+	$fos->setFosajax();
+	
+	echo "Nouveau \"Administrateur\" :\n";
+
+	getLoginInfo($fos);
+
+	system($fos->getBuildUserBndl()); //1 Création du UserBundle: checked ! 
+	echo "\nSATPREM#####1*> CREATING USERBUNDLE: CHECK ! ";
+	
+	system($fos->getBuildUserEnt()); //2 Création de l'Entity User dans UserBundle: checked !
+	echo "\nSATPREM#####2*> CREATING USER ENTITY IN USERBUNDLE: CHECK !";
+
+	system($fos->getDocUpdate()); //3 Requête SQL: checked !
+	echo "\nSATPREM#####3*> SQL QUERY CONSTRUCTION: CHECK !";
+	
+	system($fos->getDocForce()); //4 Enregistrement en BDD: checked !
+	echo "\nSATPREM#####4*>  RECORDING IN BDD: CHECK !";
+
+	$fos->addInComposer("composer.json");//5  --> Ajout de FOS dans composer.json
+	echo "\nSATPREM#####5*> ADDING FOSUSERBUNDLE IN COMPOSER.JSON: CHECK ! \n";
+	echo "\nSATPREM#*> PLEASE WAIT A FEW MINUTE. \n";
+	
+	system($fos->getCmdDownloadFos()); //6 //--> unchecked Problems with $fos->addInComposer
+	echo "\nSATPREM#####6*> INSTALL FOSUSERBUNDLE: CHECK !\n";
+
+	$fos->addInKernel("app/AppKernel.php"); //7 --> Ajout de FOS dans AppKernel.php checked !
+	echo "\nSATPREM#####7*> ADDING FOSUSERBUNDLE IN APPKERNEL.PHP CHECK !\n";
+
+	$fos->writeFile($fos->getEditUserBundleFile(), 'src/'.$fos->getBundleRootName().'/UserBundle/'.$fos->getBundleRootName().'UserBundle.php'); //8 Modification du fichier UserBundle.php checked !
+	echo "\nSATPREM#####8*> EDITING ".strtoupper($fos->getBundleRootName())."USERBUNDLE.PHP FILE:  CHECK ! \n";
+	
+	//9 -> user Entity  TODO: TO  CHECK
+	$fos->writeFile($fos->getRewriteUserEnt(), 'src/'.$fos->getBundleRootName()."/UserBundle/Entity/User.php");
+	echo "\nSATPREM#####9*> EDITING USER.PHP ENTITY: CHECK !\n";
+
+	$fos->config("app/config/config.yml"); //10 -> config --> checked !
+	echo "\nSATPREM#####10*> EDITING CONFIG.YML FILE: CHECK !\n";
+
+
+	system($fos->getDocForce()); //11 Enregistrement en BDD checked !
+	echo "\nSATPREM#####11*> RECORDING IN BDD: CHECK !\n";
+
+ 	$fos->securityFile("app/config/security.yml"); //12 -> security checked !
+	echo "\nSATPREM#####12*> EDITING SECURITY.YML FILE: CHECK !\n";
+
+	$fos->routingFos("app/config/routing.yml"); //13 -> routing checked !
+	echo "\nSATPREM#####13*> EDITING ROUTING.YML FILE: CHECK !\n";
+
+	$fos->writeFosAjax(); // 14
+	echo "\nSATPREM#####14*> WRITING LOGIN.JS:  CHECK !\n";
+
+	$fos->writeFile($fos->getLoginForm(),'vendor/friendsofsymfony/user-bundle/Resources/views/Security/login.html.twig' ); //15  génération du template de login: checked! 
+	echo "\nSATPREM#####15*>EDITING FOSUSERBUNDLE LOGIN TEMPLATE: CHECK !\n";
+
+	sleep(3);
+
+	if (!copy('wbrmspm/bootstrap.zip', 'web/bootstrap.zip')) {
+    	echo "BOOTSTRAP COPY FAILED...\n";
+	}else system('cd web/ && unzip bootstrap.zip');
+
+	if (!copy('wbrmspm/jquery.zip', 'web/jquery.zip')) {
+    	echo "JQUERY COPY FAILED...\n";
+	}else system('cd web/ && unzip jquery.zip');
+
+	if (!copy('wbrmspm/spmCss.zip', 'web/spmCss.zip')) {
+    	echo "CSS COPY FAILED...\n";
+	}else system('cd web/ && unzip spmCss.zip');
+	
+	sleep(3);
+
+	system($fos->getRouteDebug()); //17  
+
+	system($fos->getDocForce()); //18 Enregistrement en BDD checked !
+	echo "\nSATPREM#####16*> RECORDING IN BDD:  CHECK !\n";
+
+	system($fos->getcreateUser(), $n);
+	echo "SATPREM#####17*> ".$n."\n";//16   CHECK!
+	
+	system($fos->getPromoteUser() , $n); //17  CHECK !
+	echo "\nSATPREM#####18*> ".$n."\n";
+
+	$builder->setAdminCtrl();
+	$builder->WriteAdminCtrl($builder->getAdminCtrl(), $bundlePath."/Controller/AdminController.php" );
+	echo "\nSATPREM#####19*> WRITING ADMIN CONTROLLER: CHECK\n";
+	
+	$template->setAdminPage();
+	mkdir($bundlePath.'/Resources/views/Admin/');
+	$template->WriteTpl($template->getAdminPage(), $bundlePath.'/Resources/views/Admin/admin.html.php');
+	echo "\nSATPREM#####20*> WRITING ADMIN PAGE: CHECK\n";
+
+	echo "\n";	
+	echo "\n";
+	echo "\n";
+	echo "\n";
+	foreach ($arrayEntityName as $theEntity)
+	{
+		echo "\n> Create $theEntity Entity and controller, ok!";
+	}
+	echo "\n> Create UserBundle, ok!";
+	echo "\n> Create User Entity, ok!";
+	echo "\n> Sql query, ok!";
+	echo "\n> Sql bdd user recording, ok!";
+	echo "\n> Composer.json file configuration, ok!";
+	echo "\n> Install FOSUserBundle, ok!";
+	echo "\n> Edit app/AppKernel.php file configuration, ok!";
+	echo "\n> Edit ".$fos->getBundleRootName()."UserBundle.php file configuration, ok!";
+	echo "\n> Edit User.php Entity file, ok!";
+	echo "\n> Edit app/config/config.yml configuration file, ok!";
+	echo "\n> Bdd recording, ok!";
+	echo "\n> Edit app/config/security.yml configuration file, ok!";
+	echo "\n> Edit app/config/routing.yml configuration file, ok!";
+	echo "\n> Writing login.js file, ok!";
+	echo "\n> Edit FOSUserBundle login template file, ok!";
+	echo "\n> Creating admin user in Bdd, ok!";
+	echo "\n> Creating admin page controller, ok!";
+	echo "\n> Creating admin page view, ok!\n";
+}
+else 
+	foreach ($arrayEntityName as $theEntity)
+	{
+		echo "\n> Create $theEntity Entity and controller, ok!";
+	}
+	echo "\n";
+//=================================================================
+
+
+
+	 
